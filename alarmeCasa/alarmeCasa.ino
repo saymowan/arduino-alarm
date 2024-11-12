@@ -1,6 +1,6 @@
 #include <LiquidCrystal.h> // Biblioteca LCD
 
-LiquidCrystal lcd(13, 12, 5, 4, 3, 2); // Pinos do LCD
+LiquidCrystal lcd(12, 13, 5, 4, 3, 2); // Pinos do LCD
 int vermelhoLedPin = 8;
 int verdeLedPin = 9;
 int azulLedPin = 10;
@@ -19,7 +19,7 @@ unsigned long debounceDelay = 50; // Tempo de debounce para o botão
 void setup() {
   Serial.begin(9600); // Inicializa a comunicação serial
   lcd.begin(16, 2);
-  lcd.print("ALARME CASA MANEZINHA");
+  lcd.print("ALARME CASA");
 
   // Configurações dos pinos
   pinMode(vermelhoLedPin, OUTPUT); 
@@ -47,6 +47,8 @@ void loop() {
         alarmeAtivado = true;
         movimentoPersistente = false;
         escreveLCD("Alarme Ativado   ", 0);
+        defineCorLed(0, 0, 255); // LED verde para indicar sistema pronto
+
       } else {
         alarmeAtivado = false;
         movimentoPersistente = false;
