@@ -1,136 +1,82 @@
 #include <LiquidCrystal.h> // Biblioteca LCD
 
 LiquidCrystal lcd(12, 13, 5, 4, 3, 2); // Pinos do LCD
-int vermelhoLedPin = 8;
-int verdeLedPin = 9;
-int azulLedPin = 10;
-int buzzerPin = 6; // Pino do buzzer
-int pirPin = 11;    // Pino do sensor PIR
-int botaoAtivarAlarmePin = 7;    // Pino do botão de ativar/desativar alarme
+int vermelhoLedPin = 8; // Pino para cor vermelha do LED RGB
+int verdeLedPin = 9;    // Pino para cor verde do LED RGB
+int azulLedPin = 10;    // Pino para cor azul do LED RGB
+int buzzerPin = 6;      // Pino do buzzer
+int trigPin = 11;       // Pino do Trigger do sensor ultrassônico
+int echoPin = 7;        // Pino do Echo do sensor ultrassônico
 
-bool alarmeAtivado = false;  // Estado do alarme
-bool movimentoDetectado = false;  // Estado do sensor PIR
-bool movimentoPersistente = false; // Estado persistente do movimento detectado
-bool buttonStateAtivarAlarme = false;
-bool lastButtonState = LOW; // Estado anterior do botão
-unsigned long lastDebounceTime = 0;
-unsigned long debounceDelay = 50; // Tempo de debounce para o botão
+long duracao;
+int distancia;
 
 void setup() {
   Serial.begin(9600); // Inicializa a comunicação serial
-  lcd.begin(16, 2);
-  lcd.print("ALARME CASA");
+  lcd.begin(16, 2);   // Inicializa o LCD de 16x2
+  escreveLCD("ALARME CASA     ", 0);
+  escreveLCD("PROJETO ROBOTICA", 1);
 
   // Configurações dos pinos
   pinMode(vermelhoLedPin, OUTPUT); 
   pinMode(verdeLedPin, OUTPUT); 
   pinMode(azulLedPin, OUTPUT); 
-  pinMode(pirPin, INPUT);   
   pinMode(buzzerPin, OUTPUT); 
-  pinMode(botaoAtivarAlarmePin, INPUT); 
+  pinMode(trigPin, OUTPUT);  // Configura o pino de Trigger como saída
+  pinMode(echoPin, INPUT);   // Configura o pino de Echo como entrada
 }
 
 void loop() {
-  // Lógica de debounce do botão
-  bool reading = digitalRead(botaoAtivarAlarmePin);
-
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
-  }
-
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (reading == HIGH && !buttonStateAtivarAlarme) {
-      buttonStateAtivarAlarme = true;
-
-      // Alterna o estado do alarme
-      if (!alarmeAtivado) {
-        alarmeAtivado = true;
-        movimentoPersistente = false;
-        escreveLCD("Alarme Ativado   ", 0);
-        defineCorLed(0, 0, 255); // LED verde para indicar sistema pronto
-
-      } else {
-        alarmeAtivado = false;
-        movimentoPersistente = false;
-        resetaAlarme();
-      }
-    } else if (reading == LOW) {
-      buttonStateAtivarAlarme = false;
-    }
-  }
-
-  lastButtonState = reading;
-
-  // Se o alarme está ativado, verifica o sensor PIR para detectar movimento
-  if (alarmeAtivado) {
-    movimentoDetectado = detectaMovimentoPIR();
-    
-    // Se houver movimento, ativa o estado persistente de movimento
-    if (movimentoDetectado) {
-      movimentoPersistente = true;
-    }
-
-    // Dispara o alarme se o movimento foi detectado e está persistente
-    if (movimentoPersistente) {
-      disparaAlarme();
-    } 
-    else {
-      piscaLed(vermelhoLedPin);  // Pisca o LED vermelho enquanto não há movimento
-    }
-  }
-}
-
-void defineCorLed(int vermelho, int verde, int azul) {
-    analogWrite(vermelhoLedPin, vermelho);
-    analogWrite(verdeLedPin, verde);
-    analogWrite(azulLedPin, azul);
-}
-
-void disparaAlarme() {
-  escreveLCD("Casa Invadida!", 1);
-  tone(buzzerPin, 1000); // Toca uma nota de 1000 Hz enquanto o alarme está ativo
+  // Envia um pulso para o Trigger do sensor ultrassônico
+  digitalWrite(trigPin, LOW);  
+  delayMicroseconds(2);  
+  digitalWrite(trigPin, HIGH); 
+  delayMicroseconds(10);   
+  digitalWrite(trigPin, LOW);  
   
-  while (alarmeAtivado && movimentoPersistente) {  // Continua o alarme até desativação
-    piscaLed(vermelhoLedPin); // Pisca o LED vermelho
-    delay(500);
-
-    // Verifica se o botão foi pressionado para desativar o alarme
-    if (digitalRead(botaoAtivarAlarmePin) == HIGH) {
-      alarmeAtivado = false;
-      movimentoPersistente = false; // Reseta o estado de movimento persistente
-      resetaAlarme();
-      break; // Sai do loop se o alarme for desativado
-    }
-  }
+  // Lê a duração do pulso de Echo
+  duracao = pulseIn(echoPin, HIGH);
   
-  noTone(buzzerPin); // Desliga o som quando o alarme é desativado
-}
+  // Calcula a distância em centímetros (velocidade do som = 0,0343 cm/us)
+  distancia = duracao * 0.0343 / 2;
+  delay(250);
 
-void resetaAlarme() {
-  noTone(buzzerPin); // Desliga o som
-  defineCorLed(0, 255, 0); // LED verde para indicar sistema pronto
-  escreveLCD("Alarme Desativado", 0);
-  escreveLCD("                   ", 1); // Limpa segunda linha do LCD
-}
+  // Exibe a distância no Monitor Serial para depuração (opcional)
+  Serial.print("Distancia: ");
+  Serial.print(distancia);
+  Serial.println(" cm");
 
-bool detectaMovimentoPIR() {
-  delay(200);  // Evita leituras muito rápidas
-  int sensorValue = digitalRead(pirPin); // Lê o valor do sensor PIR
-  
-  if (sensorValue == HIGH) { // Movimento detectado
-    return true;
+  // Atualiza a distância no LCD
+  lcd.setCursor(0, 0);
+  lcd.print("Distancia: ");
+  lcd.print(distancia);
+  lcd.print(" cm    "); // Adiciona espaços para limpar qualquer valor residual
+
+  // Se a distância for menor que 10 cm, consideramos que há algo perto
+  if (distancia < 7) {
+    digitalWrite(vermelhoLedPin, HIGH); // Acende a cor vermelha do LED
+    digitalWrite(verdeLedPin, LOW);     // Desliga a cor verde do LED
+    digitalWrite(azulLedPin, LOW);      // Desliga a cor azul do LED
+    digitalWrite(buzzerPin, HIGH);      // Emite o som do buzzer
+    escreveLCD("Intruso entrou", 1);     // Exibe no LCD
+    delay(3000);  // Ação dura 5 segundos
+    digitalWrite(buzzerPin, LOW);       // Desliga o buzzer
+  } 
+  // Se a distância for maior que 10 cm, não há intruso
+  else {
+    digitalWrite(vermelhoLedPin, LOW);  // Desliga a cor vermelha do LED
+    digitalWrite(verdeLedPin, HIGH);    // Acende a cor verde do LED
+    digitalWrite(azulLedPin, LOW);      // Desliga a cor azul do LED
+    escreveLCD("Ninguem na casa", 1);   // Exibe no LCD
   }
-  return false;
+
+  delay(200);  // Atraso para evitar leituras excessivas do sensor ultrassônico
 }
 
-void escreveLCD(String mensagem, int linha) {
+// Função para escrever no LCD
+void escreveLCD(String texto, int linha) {
   lcd.setCursor(0, linha);
-  lcd.print(mensagem);
-}
-
-void piscaLed(int ledPin) {
-  digitalWrite(ledPin, HIGH);
-  delay(200);
-  digitalWrite(ledPin, LOW);
-  delay(200);
+  lcd.print("                ");  // Limpa a linha
+  lcd.setCursor(0, linha);
+  lcd.print(texto);  // Escreve o texto na linha do LCD
 }
